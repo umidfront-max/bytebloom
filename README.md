@@ -4,6 +4,7 @@
 npm install
 npm run dev      # http://localhost:5173
 npm run build    # dist/
+npm run deploy   # build + GitHub Pages (gh-pages branch) → https://umidfront-max.github.io/bytebloom/
 ```
 
 ## Tuzilma
@@ -12,6 +13,8 @@ npm run build    # dist/
 - `src/composables/useTheme.js` — dark/light rejim (localStorage + tizim sozlamasi, View Transitions bilan doira effekti)
 - `src/composables/useReveal.js` — `v-reveal` direktivasi (scroll animatsiya, ixtiyoriy kechikish ms; `.left` / `.right` / `.scale` modifikatorlari)
 - `src/composables/usePointer.js` — `v-spotlight` (kartochkada kursor yorug'ligi) va `v-magnetic` (tugma kursorga tortiladi)
+- `src/composables/useSectionFx.js` — bo'lim fon effektlari uchun kursor holati (`--cx/--cy/--px/--py`) va ekrandan chiqqanda pauza
+- `src/components/fx/NetworkField.vue` — "Afzalliklar" fonidagi canvas tugunlar tarmog'i
 - `src/data.js` — barcha matnlar va ro'yxatlar bitta joyda
 - `src/style.css` — rang tokenlari (`:root` va `[data-theme="dark"]`)
 

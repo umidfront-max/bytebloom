@@ -1,9 +1,24 @@
 <script setup>
 import { advantages } from '../data'
+import { useSectionFx } from '../composables/useSectionFx'
+import NetworkField from './fx/NetworkField.vue'
+
+const { el: section, hover, paused, pointer, onMove, onLeave } = useSectionFx()
 </script>
 
 <template>
-  <section id="afzalliklar" class="soft">
+  <section
+    id="afzalliklar" ref="section"
+    class="soft fx-sec" :class="{ hover, paused }"
+    @pointermove="onMove" @pointerleave="onLeave"
+  >
+    <div class="fx-bg" aria-hidden="true">
+      <span class="halo h1"></span>
+      <span class="halo h2"></span>
+      <NetworkField :paused="paused" :pointer="pointer" />
+      <div class="fx-glow"></div>
+    </div>
+
     <div class="wrap">
       <div class="sec-head" v-reveal>
         <span class="kicker">Afzalliklar</span>
@@ -29,6 +44,19 @@ import { advantages } from '../data'
 </template>
 
 <style scoped>
+.halo { position: absolute; border-radius: 50%; will-change: transform; }
+.h1 {
+  width: 540px; height: 540px; left: 50%; top: -220px; margin-left: -270px;
+  background: radial-gradient(closest-side, var(--mesh-a), transparent);
+  animation: breathe 9s ease-in-out infinite;
+}
+.h2 {
+  width: 480px; height: 480px; right: -140px; bottom: -160px;
+  background: radial-gradient(closest-side, var(--mesh-b), transparent);
+  animation: breathe 12s ease-in-out -4s infinite;
+}
+@keyframes breathe { 50% { transform: scale(1.25); opacity: .6; } }
+
 .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
 .why-top { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
 .why-top .icon { margin-bottom: 0; flex-shrink: 0; }

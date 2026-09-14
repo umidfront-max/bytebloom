@@ -1,11 +1,30 @@
 <script setup>
 import { contact } from '../data'
 const year = new Date().getFullYear()
+
+// Miltillovchi yulduzlar (deterministik psevdo-tasodif)
+const stars = Array.from({ length: 42 }, (_, i) => {
+  const r = (n) => ((Math.sin((i + 1) * n) * 43758.5453) % 1 + 1) % 1
+  return {
+    left: `${(r(12.9898) * 100).toFixed(2)}%`,
+    top: `${(r(78.233) * 100).toFixed(2)}%`,
+    size: `${(r(39.425) * 1.8 + 1).toFixed(1)}px`,
+    dur: `${(r(11.135) * 3 + 2.5).toFixed(1)}s`,
+    delay: `-${(r(63.7) * 5).toFixed(1)}s`,
+  }
+})
 </script>
 
 <template>
   <footer>
     <span class="glow-line" aria-hidden="true"></span>
+    <div class="stars" aria-hidden="true">
+      <i
+        v-for="(s, i) in stars" :key="i"
+        :style="{ left: s.left, top: s.top, width: s.size, height: s.size, '--dur': s.dur, '--delay': s.delay }"
+      ></i>
+    </div>
+    <span class="foot-aura" aria-hidden="true"></span>
     <div class="wrap">
       <div class="foot">
         <div class="brand">
@@ -49,6 +68,23 @@ footer { background: #12275F; color: #BFDBFE; padding: 56px 0 0; position: relat
 }
 @keyframes sweep { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 
+.stars { position: absolute; inset: 0; pointer-events: none; }
+.stars i {
+  position: absolute; border-radius: 50%; background: #E0F2FE;
+  box-shadow: 0 0 6px rgba(186, 230, 253, .9);
+  opacity: .15; animation: twinkle var(--dur) ease-in-out var(--delay) infinite;
+}
+.stars i:nth-child(4n) { background: #5EEAD4; box-shadow: 0 0 8px rgba(94, 234, 212, .9); }
+@keyframes twinkle { 50% { opacity: .9; transform: scale(1.4); } }
+.foot-aura {
+  position: absolute; left: 50%; bottom: -260px; width: 900px; height: 420px; margin-left: -450px;
+  border-radius: 50%; pointer-events: none;
+  background: radial-gradient(closest-side, rgba(45, 212, 191, .18), rgba(96, 165, 250, .08) 55%, transparent);
+  animation: auraPulse 8s ease-in-out infinite;
+}
+@keyframes auraPulse { 50% { transform: scale(1.12); opacity: .7; } }
+footer > .wrap { position: relative; z-index: 1; }
+
 .foot { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr; gap: 28px; }
 footer h4 { color: #fff; margin-bottom: 14px; font-size: 15px; letter-spacing: -.01em; }
 .logo { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; width: fit-content; }
@@ -86,10 +122,16 @@ footer h4 { color: #fff; margin-bottom: 14px; font-size: 15px; letter-spacing: -
 .wordmark {
   margin-top: 20px; text-align: center; white-space: nowrap; user-select: none;
   font-size: clamp(56px, 13.5vw, 170px); font-weight: 800; letter-spacing: -.06em; line-height: .78;
-  background: linear-gradient(180deg, rgba(255, 255, 255, .13), rgba(255, 255, 255, 0) 85%);
+  background: linear-gradient(100deg, rgba(255, 255, 255, .12) 0 40%, rgba(94, 234, 212, .55) 50%, rgba(255, 255, 255, .12) 60% 100%);
+  background-size: 250% 100%;
   -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  -webkit-mask-image: linear-gradient(180deg, #000 20%, transparent 90%);
+  mask-image: linear-gradient(180deg, #000 20%, transparent 90%);
+  animation: wordSweep 7s ease-in-out infinite;
   translate: 0 12%;
 }
+@keyframes wordSweep { 0%, 15% { background-position: 100% 0; } 65%, 100% { background-position: 0% 0; } }
+@media (prefers-reduced-motion: reduce) { .wordmark { background-position: 50% 0; } }
 @media (max-width: 900px) { .foot { grid-template-columns: 1fr 1fr; } .brand { grid-column: 1 / -1; } }
 @media (max-width: 480px) { .foot { grid-template-columns: 1fr; } }
 </style>

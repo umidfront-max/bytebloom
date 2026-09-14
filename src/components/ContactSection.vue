@@ -1,6 +1,21 @@
 <script setup>
 import { reactive, ref } from 'vue'
 import { contact } from '../data'
+import { useSectionFx } from '../composables/useSectionFx'
+
+const { el: section, hover, paused, onMove, onLeave } = useSectionFx()
+
+// Ko'tariluvchi zarrachalar — tasodifiy, lekin har renderda bir xil bo'lishi uchun oldindan hisoblangan
+const particles = Array.from({ length: 28 }, (_, i) => {
+  const r = (n) => ((Math.sin((i + 1) * n) * 10000) % 1 + 1) % 1
+  return {
+    left: `${(r(12.9898) * 100).toFixed(1)}%`,
+    size: `${(r(78.233) * 3 + 2).toFixed(1)}px`,
+    dur: `${(r(37.719) * 8 + 9).toFixed(1)}s`,
+    delay: `-${(r(93.113) * 16).toFixed(1)}s`,
+    drift: `${((r(4.321) - 0.5) * 80).toFixed(0)}px`,
+  }
+})
 
 const serviceOptions = ['Loyiha-texnik hujjatlar', 'Kelishuv va ekspertiza', 'Tizim yaratish', 'AX hujjatlari', 'Texnik qo‘llab-quvvatlash']
 const form = reactive({ name: '', phone: '', org: '', service: serviceOptions[0], message: '' })
@@ -20,7 +35,22 @@ async function submit() {
 </script>
 
 <template>
-  <section id="aloqa">
+  <section
+    id="aloqa" ref="section"
+    class="fx-sec" :class="{ hover, paused }"
+    @pointermove="onMove" @pointerleave="onLeave"
+  >
+    <div class="fx-bg contact-bg" aria-hidden="true">
+      <div class="fx-glow"></div>
+      <span class="beam b1"></span>
+      <span class="beam b2"></span>
+      <div class="ripples"><i></i><i></i><i></i><i></i></div>
+      <span
+        v-for="(p, i) in particles" :key="i" class="particle"
+        :style="{ left: p.left, width: p.size, height: p.size, '--dur': p.dur, '--delay': p.delay, '--drift': p.drift }"
+      ></span>
+    </div>
+
     <div class="wrap">
       <div class="sec-head" v-reveal>
         <span class="kicker">Aloqa</span>
@@ -97,6 +127,61 @@ async function submit() {
 </template>
 
 <style scoped>
+/* Fon: signal to'lqinlari, nurlar, zarrachalar */
+.contact-bg {
+  -webkit-mask-image: radial-gradient(ellipse 90% 85% at 40% 60%, #000 40%, transparent 100%);
+  mask-image: radial-gradient(ellipse 90% 85% at 40% 60%, #000 40%, transparent 100%);
+}
+.ripples {
+  position: absolute; left: 50%; top: 58%; width: 0; height: 0;
+  translate: calc(var(--px, 0) * -24px) calc(var(--py, 0) * -18px);
+  transition: translate 1.2s var(--ease);
+}
+.ripples i {
+  position: absolute; left: -720px; top: -720px; width: 1440px; height: 1440px; border-radius: 50%;
+  border: 2px solid var(--fx-ring); opacity: 0;
+  box-shadow: 0 0 40px var(--fx-beam), inset 0 0 40px var(--fx-beam);
+  animation: ripple 10s cubic-bezier(.2, .6, .35, 1) infinite;
+}
+.ripples i:nth-child(2) { animation-delay: -2.5s; }
+.ripples i:nth-child(3) { animation-delay: -5s; }
+.ripples i:nth-child(4) { animation-delay: -7.5s; }
+@keyframes ripple {
+  0% { transform: scale(.06); opacity: 0; }
+  8% { opacity: 1; }
+  100% { transform: scale(1); opacity: 0; }
+}
+
+.beam {
+  position: absolute; top: -40%; left: 0; width: 220px; height: 180%;
+  background: linear-gradient(90deg, transparent, var(--fx-beam) 40%, var(--fx-beam) 60%, transparent);
+  rotate: 18deg; opacity: 0;
+  animation: sweepBeam 14s ease-in-out infinite;
+}
+.beam.b2 { width: 120px; animation-duration: 19s; animation-delay: -8s; }
+@keyframes sweepBeam {
+  0% { transform: translateX(-30vw); opacity: 0; }
+  15%, 85% { opacity: 1; }
+  100% { transform: translateX(120vw); opacity: 0; }
+}
+
+.particle {
+  position: absolute; bottom: -10px; border-radius: 50%;
+  background: var(--fx-pulse-a); box-shadow: 0 0 10px rgba(45, 212, 191, .8);
+  opacity: 0;
+  animation: rise var(--dur) linear var(--delay) infinite;
+}
+.particle:nth-child(3n) { background: var(--fx-pulse-b); box-shadow: 0 0 10px rgba(96, 165, 250, .8); }
+@keyframes rise {
+  0% { transform: translate(0, 0); opacity: 0; }
+  12% { opacity: .9; }
+  80% { opacity: .6; }
+  100% { transform: translate(var(--drift), -900px); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .particle, .beam { display: none; }
+}
+
 .contact-grid { display: grid; grid-template-columns: .85fr 1.15fr; gap: 28px; align-items: stretch; }
 
 .info-box {

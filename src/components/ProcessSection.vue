@@ -1,13 +1,69 @@
 <script setup>
 import { ref } from 'vue'
 import { steps } from '../data'
+import { useSectionFx } from '../composables/useSectionFx'
 
 const active = ref(null)
 const gridlines = [100, 75, 50, 25, 0]
+
+const { el: section, hover, paused, onMove, onLeave } = useSectionFx()
+
+// Silliq sinusoida (Q + T bo'g'inlari). close=true bo'lsa pastgacha yopilgan maydon.
+function wave(y, amp, period, width, close) {
+  let d = `M0 ${y} Q ${period / 4} ${y - amp} ${period / 2} ${y}`
+  for (let x = period; x <= width; x += period / 2) d += ` T ${x} ${y}`
+  return close ? `${d} V1000 H0 Z` : d
+}
+// SVG butun bo'limni qoplaydi (viewBox 1440×1000).
+// Siljiydigan to'lqinlar kengligi 2880 — bir davrga surilganda chok ko'rinmaydi
+const waves = [
+  { d: wave(740, 42, 720, 2880, true), period: 720, dur: 16, cls: 'w1' },
+  { d: wave(790, 32, 480, 2880, true), period: 480, dur: 11, cls: 'w2' },
+  { d: wave(840, 24, 960, 2880, true), period: 960, dur: 22, cls: 'w3' },
+]
+// "Ma'lumot" impulslari — kartalar bilan yopilmaydigan joylarda:
+// sarlavha atrofida va bo'lim pastida
+const streams = [
+  { d: wave(70, 22, 900, 1440), dur: 9, delay: -2 },
+  { d: wave(150, 16, 600, 1440), dur: 7, delay: -5 },
+  { d: wave(955, 14, 1200, 1440), dur: 10, delay: -7 },
+]
 </script>
 
 <template>
-  <section id="jarayon">
+  <section
+    id="jarayon" ref="section"
+    class="fx-sec" :class="{ hover, paused }"
+    @pointermove="onMove" @pointerleave="onLeave"
+  >
+    <div class="fx-bg flow-bg" aria-hidden="true">
+      <div class="fx-glow"></div>
+      <svg class="flow" viewBox="0 0 1440 1000" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="flow-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop class="stop-top" offset="0" />
+            <stop class="stop-bottom" offset="1" />
+          </linearGradient>
+          <linearGradient id="flow-stroke" x1="0" y1="0" x2="1440" y2="0" gradientUnits="userSpaceOnUse">
+            <stop class="fx-stop-a" offset="0" />
+            <stop class="fx-stop-b" offset=".55" />
+            <stop class="fx-stop-c" offset="1" />
+          </linearGradient>
+        </defs>
+
+        <path
+          v-for="wv in waves" :key="wv.cls"
+          class="wave" :class="wv.cls" :d="wv.d"
+          :style="{ '--shift': `-${wv.period}px`, '--dur': `${wv.dur}s` }"
+        />
+        <g v-for="(s, i) in streams" :key="i" class="stream" :style="{ '--dur': `${s.dur}s`, '--delay': `${s.delay}s` }">
+          <path class="rail" :d="s.d" />
+          <path class="comet halo" :d="s.d" pathLength="100" />
+          <path class="comet core" :d="s.d" pathLength="100" />
+        </g>
+      </svg>
+    </div>
+
     <div class="wrap">
       <div class="sec-head" v-reveal>
         <span class="kicker">Qanday ishlaymiz</span>
@@ -67,6 +123,40 @@ const gridlines = [100, 75, 50, 25, 0]
 </template>
 
 <style scoped>
+/* Fon: oqim */
+.flow-bg {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+}
+.flow {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  transform: translate3d(0, calc(var(--py, 0) * -14px), 0);
+  transition: transform 1.2s var(--ease);
+}
+.stop-top { stop-color: var(--teal); stop-opacity: .2; }
+.stop-bottom { stop-color: #2563EB; stop-opacity: 0; }
+[data-theme="dark"] .stop-top { stop-color: #2DD4BF; stop-opacity: .18; }
+[data-theme="dark"] .stop-bottom { stop-color: #2DD4BF; stop-opacity: 0; }
+.wave { fill: url(#flow-fill); animation: waveShift var(--dur) linear infinite; }
+.wave.w2 { animation-direction: reverse; opacity: .85; }
+.wave.w3 { opacity: .7; }
+@keyframes waveShift { to { transform: translateX(var(--shift)); } }
+
+.stream path { fill: none; vector-effect: non-scaling-stroke; stroke-linecap: round; }
+.rail { stroke: var(--fx-trace); stroke-width: 1.2; stroke-dasharray: 3 7; }
+.comet {
+  stroke: url(#flow-stroke);
+  stroke-dasharray: 10 190; stroke-dashoffset: 200;
+  animation: travel var(--dur) linear var(--delay) infinite;
+}
+.comet.core { stroke-width: 2.6; }
+.comet.halo { stroke-width: 9; opacity: var(--fx-halo); }
+@keyframes travel { to { stroke-dashoffset: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .comet { display: none; }
+}
+
 .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
 .step {
   background: var(--card); border-radius: var(--radius); padding: 24px; border: 1px solid var(--line);
