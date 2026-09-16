@@ -1,5 +1,6 @@
 <script setup>
 import { contact } from '../data'
+import BrandLockup from './brand/BrandLockup.vue'
 const year = new Date().getFullYear()
 
 // Miltillovchi yulduzlar (deterministik psevdo-tasodif)
@@ -28,7 +29,7 @@ const stars = Array.from({ length: 42 }, (_, i) => {
     <div class="wrap">
       <div class="foot">
         <div class="brand">
-          <a class="logo" href="#top"><span class="mark">BT</span><h4>BYTEBLOOM TECHNOLOGIES</h4></a>
+          <a class="logo" href="#top" aria-label="Bytebloom Technologies — yuqoriga"><BrandLockup /></a>
           <p>Axborot tizimlari uchun to‘liq sikl xizmatlari.</p>
         </div>
         <div>
@@ -87,15 +88,13 @@ footer > .wrap { position: relative; z-index: 1; }
 
 .foot { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr; gap: 28px; }
 footer h4 { color: #fff; margin-bottom: 14px; font-size: 15px; letter-spacing: -.01em; }
-.logo { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; width: fit-content; }
-.logo h4 { margin: 0; }
-.mark {
-  width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
-  background: var(--grad); color: #fff; display: grid; place-items: center; font-size: 13px; font-weight: 800;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2);
+.logo {
+  --logo-mark: #fff;
+  --logo-text: #5EEAD4;
+  display: block; width: 244px; max-width: 100%; margin-bottom: 18px;
   transition: transform .5s var(--ease-spring);
 }
-.logo:hover .mark { transform: rotate(-8deg) scale(1.06); }
+.logo:hover { transform: scale(1.03); --logo-text: #99F6E4; }
 .brand p { max-width: 280px; }
 
 .foot > div > a:not(.logo) {

@@ -2,6 +2,7 @@
 import { ref, reactive, watch, onMounted, onUnmounted } from 'vue'
 import { nav } from '../data'
 import { useTheme } from '../composables/useTheme'
+import BrandLockup from './brand/BrandLockup.vue'
 
 const { theme, toggle } = useTheme()
 const langs = ['UZ', 'RU', 'EN']
@@ -78,7 +79,9 @@ onUnmounted(() => {
 <template>
   <header :class="{ scrolled, 'menu-open': menuOpen }">
     <div class="wrap nav">
-      <a class="logo" href="#top"><span class="mark">BT</span> BYTEBLOOM</a>
+      <a class="logo" href="#top" aria-label="Bytebloom Technologies — bosh sahifa">
+        <BrandLockup />
+      </a>
 
       <nav ref="menuEl" class="menu" :class="{ open: menuOpen }" @mouseleave="hovered = null">
         <span class="ink" :class="{ on: ink.on, snap: ink.snap }" :style="{ transform: `translateX(${ink.x}px)`, width: `${ink.w}px` }"></span>
@@ -144,22 +147,15 @@ header.scrolled::before, header.menu-open::before { opacity: 1; }
 .nav { display: flex; align-items: center; justify-content: space-between; height: 76px; gap: 24px; transition: height .4s var(--ease); }
 header.scrolled .nav { height: 64px; }
 
-.logo { display: flex; align-items: center; gap: 12px; font-weight: 800; color: var(--heading); letter-spacing: -.03em; }
-.mark {
-  width: 42px; height: 42px; border-radius: 12px; position: relative; overflow: hidden;
-  background: var(--grad);
-  color: #fff; display: grid; place-items: center; font-size: 15px; font-weight: 800;
-  box-shadow: 0 8px 20px rgba(13, 148, 136, .28), inset 0 1px 0 rgba(255, 255, 255, .2);
-  transition: transform .5s var(--ease-spring), width .4s var(--ease), height .4s var(--ease);
+.logo {
+  --logo-mark: var(--heading);
+  --logo-text: var(--teal-dark);
+  display: block; width: 96px; flex-shrink: 0;
+  transition: width .4s var(--ease), transform .5s var(--ease-spring);
 }
-.mark::after {
-  content: ""; position: absolute; inset: 0;
-  background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, .45) 50%, transparent 65%);
-  transform: translateX(-110%); transition: transform .8s var(--ease);
-}
-header.scrolled .mark { width: 38px; height: 38px; }
-.logo:hover .mark { transform: rotate(-8deg) scale(1.06); }
-.logo:hover .mark::after { transform: translateX(110%); }
+[data-theme="dark"] .logo { --logo-mark: #F1F5F9; --logo-text: #5EEAD4; }
+header.scrolled .logo { width: 84px; }
+.logo:hover { transform: scale(1.04); }
 
 .menu { position: relative; display: flex; gap: 2px; color: var(--muted); font-weight: 600; font-size: 14px; }
 .menu a { position: relative; z-index: 1; padding: 8px 14px; border-radius: 999px; transition: color .25s; }

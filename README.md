@@ -15,6 +15,8 @@ npm run deploy   # build + GitHub Pages (gh-pages branch) → https://umidfront-
 - `src/composables/usePointer.js` — `v-spotlight` (kartochkada kursor yorug'ligi) va `v-magnetic` (tugma kursorga tortiladi)
 - `src/composables/useSectionFx.js` — bo'lim fon effektlari uchun kursor holati (`--cx/--cy/--px/--py`) va ekrandan chiqqanda pauza
 - `src/components/fx/NetworkField.vue` — "Afzalliklar" fonidagi canvas tugunlar tarmog'i
+- `src/components/brand/BrandLockup.vue` — `src/logo.svg` dan olingan logo (ranglari `--logo-mark` / `--logo-text` orqali)
+- `public/favicon.svg` — o'sha logo monogrammasi, landing gradienti bilan
 - `src/data.js` — barcha matnlar va ro'yxatlar bitta joyda
 - `src/style.css` — rang tokenlari (`:root` va `[data-theme="dark"]`)
 
