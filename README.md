@@ -20,9 +20,32 @@ npm run deploy   # build + GitHub Pages (gh-pages branch) → https://umidfront-
 - `src/data.js` — barcha matnlar va ro'yxatlar bitta joyda
 - `src/style.css` — rang tokenlari (`:root` va `[data-theme="dark"]`)
 
+## Backend (ByteBloom API)
+Manzil `.env` orqali beriladi (namuna: `.env.example`):
+
+```bash
+VITE_API_BASE_URL=http://192.168.1.58:8082
+```
+
+- `src/api/client.js` — `fetch` o'rami: `credentials: include`, xatoliklarni o'zbekcha xabarga aylantiradi (`ApiError`)
+- `src/api/public.js` — public endpointlar: lead, chat sessiya/xabarlar, greeting
+- `src/api/realtime.js` — STOMP + SockJS orqali `/topic/chat/{shortId}` ga obuna (faqat qabul qilish)
+
+Ishlatilgan endpointlar: `POST /api/public/leads`, `POST /api/public/chat/sessions`,
+`POST|GET /api/public/chat/sessions/{shortId}/messages`, `GET /api/public/settings/greeting`.
+
+Chat sessiyasi `localStorage` da (`bb-chat-session`) saqlanadi. Xabarlar WebSocket orqali keladi;
+ulanib bo'lmasa har 3 soniyada `?after=` bilan polling ishlaydi. Sessiya serverda topilmasa (404) yangisi ochiladi.
+
+Til (`UZ|RU|EN`) header'dagi tanlagichdan olinadi — `src/composables/useLang.js`.
+
+> Backend `CORS_ALLOWED_ORIGINS` ro'yxatiga frontend domeni qo'shilgan bo'lishi shart, aks holda brauzer so'rovlarni bloklaydi.
+
 ## Chat
-`ChatWidget.vue` hozircha lokal: salomlashish + xizmatlar bo'yicha tezkor chiplar va oddiy avtomatik javob.
-Real botga ulash uchun `botReply()` funksiyasini API chaqiruviga almashtiring.
+`ChatWidget.vue` backendga ulangan: greeting va tezkor tugmalar `/settings/greeting` dan keladi,
+sessiya birinchi xabarda ochiladi, operator javobi WebSocket yoki polling orqali tushadi.
+Backend tezkor tugmalar bermasa — `data.js` dagi xizmatlar ro'yxati ishlatiladi.
 
 ## Forma
-`ContactSection.vue` da `submit()` ichida 1.2s simulyatsiya — o'z backend'ingizga ulang.
+`ContactSection.vue` `POST /api/public/leads` ga yuboradi. Xatolik bo'lsa server xabari forma ostida ko'rsatiladi
+(429 — rate limit, 400 — validatsiya), tugma esa "Qayta yuborish" holatiga o'tadi.

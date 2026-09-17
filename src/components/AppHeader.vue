@@ -2,11 +2,11 @@
 import { ref, reactive, watch, onMounted, onUnmounted } from 'vue'
 import { nav } from '../data'
 import { useTheme } from '../composables/useTheme'
+import { useLang } from '../composables/useLang'
 import BrandLockup from './brand/BrandLockup.vue'
 
 const { theme, toggle } = useTheme()
-const langs = ['UZ', 'RU', 'EN']
-const lang = ref('UZ')
+const { lang, langs } = useLang()
 const scrolled = ref(false)
 const progress = ref(0)
 const menuOpen = ref(false)

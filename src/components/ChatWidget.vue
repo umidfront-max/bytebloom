@@ -1,74 +1,198 @@
 <script setup>
-import { ref, nextTick, watch, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { services } from '../data'
+import { useLang } from '../composables/useLang'
+import { createChatSession, sendChatMessage, fetchChatMessages, fetchGreeting } from '../api/public'
+import { connectChat } from '../api/realtime'
+
+const SESSION_KEY = 'bb-chat-session'
+const POLL_MS = 3000
+
+const { lang } = useLang()
 
 const open = ref(false)
 const input = ref('')
-const typing = ref(false)
-const unread = ref(1)
+const unread = ref(0)
 const hint = ref(false)
+const sending = ref(false)
+const error = ref('')
 const listEl = ref(null)
 const inputEl = ref(null)
 
-const now = () => new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })
+const shortId = ref(localStorage.getItem(SESSION_KEY) || '')
+const messages = ref([])
+const greeting = ref(null) // { text, workingHours, quick: [] }
 
-const messages = ref([
-  { id: 1, from: 'bot', text: 'Assalomu aleykum! Qanday produktlarimiz sizni qiziqtirmoqda?', time: now() },
-])
+// Tezkor javob tugmalari: backend bermasa — sayt xizmatlari ro'yxati
+const quick = computed(() => (greeting.value?.quick?.length ? greeting.value.quick : services.map((s) => s.title)))
+const showQuick = computed(() => messages.value.length === 0 && !sending.value)
 
-// Tezkor javob chiplari — xizmatlar ro'yxatidan
-const quick = computed(() => services.map((s) => s.title))
-const showQuick = computed(() => messages.value.length === 1)
-
-let seq = 2
+const time = (iso) => {
+  const d = iso ? new Date(iso) : new Date()
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })
+}
 const scrollDown = () => nextTick(() => { if (listEl.value) listEl.value.scrollTop = listEl.value.scrollHeight })
 
-function botReply(userText) {
-  typing.value = true
+let lastAt = ''
+function pushMessage(m) {
+  if (!m || messages.value.some((x) => x.id === m.id)) return
+  // O'zimiz yuborgan xabar WebSocket orqali qaytsa — vaqtinchalik nusxasini almashtiramiz
+  const tmp = messages.value.findIndex((x) => x.pending && x.senderType === 'GUEST' && x.content === m.content)
+  if (tmp !== -1) messages.value.splice(tmp, 1, m)
+  else messages.value.push(m)
+  if (m.createdAt && m.createdAt > lastAt) lastAt = m.createdAt
+  if (m.senderType !== 'GUEST' && !open.value) unread.value++
   scrollDown()
-  const t = userText.toLowerCase()
-  const match = services.find((s) => t.includes(s.title.toLowerCase().split(' ')[0]))
-  const text = match
-    ? `«${match.title}» bo‘yicha ma’lumot: ${match.text} Batafsil maslahat uchun telefon raqamingizni qoldiring — mutaxassis bog‘lanadi.`
-    : 'Rahmat! Savolingizni qabul qildik. Aniq javob uchun +998 97 414 77 78 raqamiga qo‘ng‘iroq qiling yoki shu yerda telefoningizni qoldiring.'
-  setTimeout(() => {
-    typing.value = false
-    messages.value.push({ id: seq++, from: 'bot', text, time: now() })
-    if (!open.value) unread.value++
-    scrollDown()
-  }, 900 + Math.random() * 600)
 }
 
-function send(text = input.value) {
-  const clean = text.trim()
-  if (!clean) return
-  messages.value.push({ id: seq++, from: 'user', text: clean, time: now() })
+// --- Sessiya ---
+async function ensureSession() {
+  if (shortId.value) return shortId.value
+  const res = await createChatSession({ language: lang.value })
+  shortId.value = res.shortId
+  try { localStorage.setItem(SESSION_KEY, res.shortId) } catch { /* private rejim */ }
+  return res.shortId
+}
+
+async function loadHistory() {
+  if (!shortId.value) return
+  try {
+    const list = await fetchChatMessages(shortId.value)
+    messages.value = Array.isArray(list) ? list : []
+    lastAt = messages.value.at(-1)?.createdAt || ''
+    scrollDown()
+  } catch (e) {
+    // Sessiya serverda topilmasa (eski shortId) — yangisini ochamiz
+    if (e?.status === 404) {
+      try { localStorage.removeItem(SESSION_KEY) } catch { /* private rejim */ }
+      shortId.value = ''
+      messages.value = []
+    } else {
+      error.value = e?.message || ''
+    }
+  }
+}
+
+// --- Real-time: WebSocket, ishlamasa polling ---
+let socket = null
+let pollTimer = 0
+
+function startPolling() {
+  if (pollTimer || !shortId.value) return
+  pollTimer = setInterval(async () => {
+    try {
+      const list = await fetchChatMessages(shortId.value, lastAt || undefined)
+      if (Array.isArray(list)) list.forEach(pushMessage)
+    } catch { /* keyingi urinishda qayta so'raladi */ }
+  }, POLL_MS)
+}
+function stopPolling() {
+  clearInterval(pollTimer)
+  pollTimer = 0
+}
+
+function startRealtime() {
+  if (socket || !shortId.value) return
+  socket = connectChat({
+    shortId: shortId.value,
+    onMessage: pushMessage,
+    onStatus: (st) => { if (st === 'online') stopPolling(); else startPolling() },
+  })
+  // WebSocket ulanguncha polling ishlab tursin
+  startPolling()
+}
+function stopRealtime() {
+  socket?.stop()
+  socket = null
+  stopPolling()
+}
+
+// --- Greeting ---
+async function loadGreeting() {
+  if (greeting.value) return
+  try {
+    const g = await fetchGreeting()
+    const byLang = { UZ: g.greetingUz, RU: g.greetingRu, EN: g.greetingEn }
+    let quickList = []
+    try {
+      const parsed = JSON.parse(g.quickButtonsJson || '[]')
+      if (Array.isArray(parsed)) {
+        quickList = parsed.map((q) => (typeof q === 'string' ? q : q?.label || q?.title)).filter(Boolean)
+      }
+    } catch { /* noto'g'ri JSON — sayt ro'yxatiga qaytamiz */ }
+    greeting.value = {
+      text: byLang[lang.value] || byLang.UZ || '',
+      workingHours: g.workingHours || '',
+      quick: quickList,
+    }
+  } catch {
+    greeting.value = { text: 'Assalomu aleykum! Qanday yordam bera olamiz?', workingHours: '', quick: [] }
+  }
+}
+
+// --- Xabar yuborish ---
+async function send(text = input.value) {
+  const content = text.trim()
+  if (!content || sending.value) return
+  sending.value = true
+  error.value = ''
+  const temp = { id: `tmp-${Date.now()}`, senderType: 'GUEST', content, createdAt: new Date().toISOString(), pending: true }
+  messages.value.push(temp)
   input.value = ''
   scrollDown()
-  botReply(clean)
+  try {
+    const id = await ensureSession()
+    if (!socket) startRealtime()
+    const saved = await sendChatMessage(id, content)
+    const i = messages.value.indexOf(temp)
+    if (i !== -1) {
+      // WebSocket allaqachon yetkazgan bo'lsa — vaqtinchalik nusxani olib tashlaymiz
+      if (saved && messages.value.some((x) => x.id === saved.id)) messages.value.splice(i, 1)
+      else messages.value.splice(i, 1, saved || { ...temp, pending: false })
+    }
+    if (saved?.createdAt && saved.createdAt > lastAt) lastAt = saved.createdAt
+  } catch (e) {
+    const i = messages.value.indexOf(temp)
+    if (i !== -1) messages.value.splice(i, 1)
+    input.value = content
+    error.value = e?.message || 'Xabar yuborilmadi.'
+  } finally {
+    sending.value = false
+    scrollDown()
+  }
 }
 
-function toggle() {
+async function toggle() {
   open.value = !open.value
   hint.value = false
-  if (open.value) {
-    unread.value = 0
-    scrollDown()
-    nextTick(() => inputEl.value?.focus())
+  if (!open.value) return
+  unread.value = 0
+  loadGreeting()
+  nextTick(() => inputEl.value?.focus())
+  if (shortId.value) {
+    if (!messages.value.length) await loadHistory()
+    startRealtime()
   }
+  scrollDown()
 }
 
 watch(open, (v) => { if (v) scrollDown() })
 
 let hintTimer
 const onKey = (e) => { if (e.key === 'Escape' && open.value) toggle() }
-onMounted(() => {
+onMounted(async () => {
   hintTimer = setTimeout(() => { if (!open.value) hint.value = true }, 5000)
   addEventListener('keydown', onKey)
+  // Oldin boshlangan suhbat bo'lsa — vidjet yopiq turganda ham javobni kutamiz
+  if (shortId.value) {
+    await loadHistory()
+    if (shortId.value) startRealtime()
+  }
 })
 onUnmounted(() => {
   clearTimeout(hintTimer)
   removeEventListener('keydown', onKey)
+  stopRealtime()
 })
 </script>
 
@@ -85,7 +209,7 @@ onUnmounted(() => {
           </div>
           <div class="who">
             <b>BYTEBLOOM</b>
-            <span>Onlayn · odatda 1 daqiqada javob beradi</span>
+            <span>{{ greeting?.workingHours ? `Ish vaqti: ${greeting.workingHours}` : 'Odatda bir necha daqiqada javob beramiz' }}</span>
           </div>
           <button class="close" aria-label="Yopish" @click="toggle">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
@@ -94,32 +218,44 @@ onUnmounted(() => {
 
         <div class="list" ref="listEl">
           <div class="day">Bugun</div>
+
+          <div v-if="greeting?.text" class="msg bot">
+            <div class="bubble">
+              <div class="tag">BYTEBLOOM <em>Bot</em></div>
+              <p>{{ greeting.text }}</p>
+            </div>
+          </div>
+
           <TransitionGroup name="msg">
-            <div v-for="m in messages" :key="m.id" class="msg" :class="m.from">
+            <div
+              v-for="m in messages" :key="m.id"
+              class="msg" :class="[m.senderType === 'GUEST' ? 'user' : 'bot', { pending: m.pending }]"
+            >
               <div class="bubble">
-                <div v-if="m.from === 'bot'" class="tag">BYTEBLOOM <em>Bot</em></div>
-                <p>{{ m.text }}</p>
-                <time>{{ m.time }}</time>
+                <div v-if="m.senderType !== 'GUEST'" class="tag">
+                  {{ m.operatorName || 'BYTEBLOOM' }}
+                  <em>{{ m.senderType === 'OPERATOR' ? 'Operator' : m.senderType === 'SYSTEM' ? 'Tizim' : 'Bot' }}</em>
+                </div>
+                <p>{{ m.content }}</p>
+                <time>{{ m.pending ? 'yuborilmoqda…' : time(m.createdAt) }}</time>
               </div>
             </div>
           </TransitionGroup>
 
-          <Transition name="msg">
-            <div v-if="typing" class="msg bot">
-              <div class="bubble typing"><i></i><i></i><i></i></div>
-            </div>
-          </Transition>
-
           <Transition name="fade">
-            <div v-if="showQuick && !typing" class="quick">
+            <div v-if="showQuick" class="quick">
               <button v-for="(q, i) in quick" :key="q" :style="{ '--i': i }" @click="send(q)">{{ q }}</button>
             </div>
           </Transition>
         </div>
 
+        <Transition name="fade">
+          <p v-if="error" class="chat-error" role="alert">{{ error }}</p>
+        </Transition>
+
         <form class="compose" @submit.prevent="send()">
-          <input ref="inputEl" v-model="input" placeholder="Xabar yozing…" autocomplete="off" />
-          <button type="submit" class="send" :disabled="!input.trim()" aria-label="Yuborish">
+          <input ref="inputEl" v-model="input" placeholder="Xabar yozing…" autocomplete="off" :disabled="sending" />
+          <button type="submit" class="send" :disabled="!input.trim() || sending" aria-label="Yuborish">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
           </button>
         </form>
@@ -300,4 +436,12 @@ onUnmounted(() => {
   .chat-root { right: 12px; bottom: 12px; }
   .panel { width: calc(100vw - 24px); height: min(580px, calc(100dvh - 100px)); }
 }
+/* Backend holati */
+.msg.pending .bubble { opacity: .6; }
+.chat-error {
+  padding: 10px 16px; font-size: 12.5px; font-weight: 600; color: #B91C1C;
+  background: #FEF2F2; border-top: 1px solid #FECACA;
+}
+[data-theme="dark"] .chat-error { color: #FCA5A5; background: #2A1315; border-top-color: #4C1D1D; }
+.compose input:disabled { opacity: .6; cursor: default; }
 </style>

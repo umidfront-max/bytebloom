@@ -1,7 +1,9 @@
 <script setup>
-import { reactive, ref } from 'vue'
+import { reactive, ref, onUnmounted } from 'vue'
 import { contact } from '../data'
 import { useSectionFx } from '../composables/useSectionFx'
+import { useLang } from '../composables/useLang'
+import { createLead } from '../api/public'
 
 const { el: section, hover, paused, onMove, onLeave } = useSectionFx()
 
@@ -17,21 +19,39 @@ const particles = Array.from({ length: 28 }, (_, i) => {
   }
 })
 
+const { lang } = useLang()
 const serviceOptions = ['Loyiha-texnik hujjatlar', 'Kelishuv va ekspertiza', 'Tizim yaratish', 'AX hujjatlari', 'Texnik qo‘llab-quvvatlash']
-const form = reactive({ name: '', phone: '', org: '', service: serviceOptions[0], message: '' })
-const status = ref('idle') // idle | sending | sent
+const empty = () => ({ name: '', phone: '', org: '', service: serviceOptions[0], message: '' })
+const form = reactive(empty())
+const status = ref('idle') // idle | sending | sent | error
+const error = ref('')
+let resetTimer
 
 async function submit() {
-  if (status.value !== 'idle') return
+  if (status.value === 'sending') return
   status.value = 'sending'
-  // TODO: real API'ga ulash. Hozircha 1.2s simulyatsiya.
-  await new Promise((r) => setTimeout(r, 1200))
-  status.value = 'sent'
-  setTimeout(() => {
-    Object.assign(form, { name: '', phone: '', org: '', service: serviceOptions[0], message: '' })
-    status.value = 'idle'
-  }, 3500)
+  error.value = ''
+  try {
+    await createLead({
+      fullName: form.name.trim(),
+      phone: form.phone.trim(),
+      organization: form.org.trim() || undefined,
+      service: form.service || undefined,
+      language: lang.value,
+      message: form.message.trim() || undefined,
+    })
+    status.value = 'sent'
+    Object.assign(form, empty())
+    clearTimeout(resetTimer)
+    resetTimer = setTimeout(() => { status.value = 'idle' }, 6000)
+  } catch (e) {
+    // ApiError xabari o'zbek tilida keladi (server yoki client.js dagi zaxira matn)
+    error.value = e?.message || 'Yuborib bo‘lmadi. Qayta urinib ko‘ring.'
+    status.value = 'error'
+  }
 }
+
+onUnmounted(() => clearTimeout(resetTimer))
 </script>
 
 <template>
@@ -107,17 +127,19 @@ async function submit() {
             <textarea id="f-msg" v-model="form.message" placeholder="Qisqacha loyiha haqida"></textarea>
           </div>
           <div class="actions">
-            <button class="btn btn-teal" :class="{ sent: status === 'sent' }" type="submit" :disabled="status !== 'idle'">
+            <button class="btn btn-teal" :class="{ sent: status === 'sent' }" type="submit" :disabled="status === 'sending'">
               <Transition name="swap" mode="out-in">
-                <span v-if="status === 'idle'" key="i" class="lbl">Yuborish <span class="arr">→</span></span>
-                <span v-else-if="status === 'sending'" key="s" class="lbl"><i class="spin"></i> Yuborilmoqda…</span>
-                <span v-else key="d" class="lbl">
+                <span v-if="status === 'sending'" key="s" class="lbl"><i class="spin"></i> Yuborilmoqda…</span>
+                <span v-else-if="status === 'sent'" key="d" class="lbl">
                   <svg class="check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg> Yuborildi
                 </span>
+                <span v-else-if="status === 'error'" key="e" class="lbl">Qayta yuborish <span class="arr">→</span></span>
+                <span v-else key="i" class="lbl">Yuborish <span class="arr">→</span></span>
               </Transition>
             </button>
             <Transition name="note">
               <p v-if="status === 'sent'" class="ok-note" role="status">Rahmat! Arizangiz qabul qilindi — tez orada bog‘lanamiz.</p>
+              <p v-else-if="status === 'error'" class="err-note" role="alert">{{ error }}</p>
             </Transition>
           </div>
         </form>
@@ -260,6 +282,8 @@ textarea { min-height: 100px; resize: vertical; }
 .swap-enter-from { opacity: 0; transform: translateY(8px); }
 .swap-leave-to { opacity: 0; transform: translateY(-8px); }
 .ok-note { font-size: 13.5px; font-weight: 600; color: var(--teal); }
+.err-note { font-size: 13.5px; font-weight: 600; color: #DC2626; max-width: 340px; }
+[data-theme="dark"] .err-note { color: #FCA5A5; }
 [data-theme="dark"] .ok-note { color: #5EEAD4; }
 .note-enter-active { transition: opacity .4s var(--ease), transform .4s var(--ease); }
 .note-leave-active { transition: opacity .25s; }
